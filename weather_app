@@ -1,0 +1,74 @@
+import json
+from datetime import datetime
+import requests
+from flask import Flask, jsonify, request
+
+TOKEN = ""
+app = Flask(__name__)
+
+
+class InvalidUsage(Exception):
+    status_code = 400
+
+    def __init__(self, message, status_code=None, payload=None):
+        Exception.__init__(self)
+        self.message = message
+        if status_code is not None:
+            self.status_code = status_code
+        self.payload = payload
+
+    def to_dict(self):
+        rv = dict(self.payload or ())
+        rv["message"] = self.message
+        return rv
+
+
+@app.errorhandler(InvalidUsage)
+def handle_invalid_usage(error):
+    response = jsonify(error.to_dict())
+    response.status_code = error.status_code
+    return response
+
+
+@app.route("/")
+def home_page():
+    return "<p><h2>KMA L2HW: weather Saas.</h2></p>"
+
+
+@app.route("/obtain_weather", methods=["POST"])
+
+
+def get_weather():
+    json_data = request.get_json()
+    local_token = json_data.get("local_token")
+    key = json_data.get("key")
+    requester_name = json_data.get("requester_name")
+    location = json_data.get("location")
+    date = json_data.get("date")
+    
+    if local_token != TOKEN:
+        raise InvalidUsage("wrong token", status_code=403)
+
+    url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{location}/{date}?key={key}&unitGroup=metric'
+    response = requests.get(url).json()
+
+    prob_of_precip = response["days"][0]["precipprob"]
+    umbrella = "Consider taking an umbrella." if prob_of_precip > 50 else ""
+
+    utc_time = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    result = {
+        "requster_name": requester_name,
+        "timestamp": utc_time,
+        "location" : location,
+        "date" : date,
+        "weather" : 
+        {
+            "description": response["days"][0]["description"],
+            "max_temp_c" : response["days"][0]["tempmax"],
+            "min_temp_c" : response["days"][0]["tempmin"],
+            "windspeed_kph" : response["days"][0]["windspeed"],
+            "Probability_of_precipitation_%" : str(prob_of_precip) + " " + umbrella
+        }
+    }
+    return result
